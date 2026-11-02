@@ -1,5 +1,5 @@
 #
-# 请大家记住拉取的是我的 maglcal/Angele-Wrt-12.04 仓库，拉取的是其他仓库有问题，别问我，我也不清楚什么问题
+# 本仓库为 maglcal/Angel-Wrt（自维护），只编译 coolsnowwolf/lede 的 x86_64 配置
 #
 # 因为SSH连接配置固件直接编译，会给github停止编译的,所以要另外触发启动编译程序
 #
