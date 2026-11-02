@@ -139,7 +139,7 @@ jobs:
     
     - name: 清理releases和workflows
       continue-on-error: true
-      uses: danshui-git/delete-releases-workflows@main
+      uses: maglcal/delete-releases-workflows@main
       with:
         delete_releases: true
         prerelease_option: all
