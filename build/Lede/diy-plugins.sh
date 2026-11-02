@@ -10,14 +10,19 @@
 
 base="${HOME_PATH:-.}"
 
-# ---------- Lucky（danshui 源新版） ----------
+# Lucky 守护进程版本钉子：跟随 https://github.com/gdy666/lucky/releases 手动更新
+# （sirpdboy 打包长期停旧版；扩展 CLI -setconf/-cd 与 3.x 兼容，已对照 gdy666/luci-app-lucky 官方打包验证）
+Lucky_ver="3.5.0"
+
+# ---------- Lucky（danshui 源界面 + 守护进程升到 Lucky_ver） ----------
 Lucky_tmp="$(mktemp -d)"
 if git clone -q --depth=1 --filter=blob:none --sparse -b Lede https://github.com/maglcal/openwrt-package.git "${Lucky_tmp}/owpkg"; then
     git -C "${Lucky_tmp}/owpkg" sparse-checkout set luci-app-lucky
     mkdir -p "${base}/package/lucky" "${base}/package/luci-app-lucky"
     cp -Rf "${Lucky_tmp}/owpkg/luci-app-lucky/lucky/." "${base}/package/lucky/"
     cp -Rf "${Lucky_tmp}/owpkg/luci-app-lucky/luci-app-lucky/." "${base}/package/luci-app-lucky/"
-    echo "Lucky 插件已就位（danshui 源新版，优先于 lede 源同名旧版）"
+    sed -i "s/^PKG_VERSION:=.*/PKG_VERSION:=${Lucky_ver}/" "${base}/package/lucky/Makefile"
+    echo "Lucky 插件已就位（界面 danshui 新版，守护进程 v${Lucky_ver}，优先于 lede 源同名旧版）"
 else
     echo "警告：Lucky 源拉取失败，将回退使用 feeds 里的旧版本" >&2
 fi
