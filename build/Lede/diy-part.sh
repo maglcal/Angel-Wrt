@@ -66,6 +66,10 @@ export rootfs_size="512/2560"
 export kernel_usage="stable"
 
 
+# 拉取定制插件源(Lucky/EasyTier 等,详见同目录 diy-plugins.sh,主路由/旁路由两版共用)
+. "$(dirname "$0")/diy-plugins.sh"
+
+
 # 修改插件名字
 grep -rl '"终端"' . | xargs -r sed -i 's?"终端"?"TTYD"?g'
 grep -rl '"TTYD 终端"' . | xargs -r sed -i 's?"TTYD 终端"?"TTYD"?g'
