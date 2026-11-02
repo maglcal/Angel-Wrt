@@ -98,14 +98,18 @@ CONFIG_PACKAGE_xz=y
 CONFIG_PACKAGE_xz-utils=y
 CONFIG_ZSTD_OPTIMIZE_O3=y
 
-# ====定制插件：Lucky/网易云音乐解锁/KMS/EasyTier/ZeroTier（主路由/旁路由两版一致）====
+# ====定制插件：Lucky/网易云音乐解锁/EasyTier/ZeroTier/frpc/socat（主路由/旁路由两版一致）====
+# KMS(luci-app-vlmcsd)为 lede 路由目标默认包，固件自带，无需在此选配
 CONFIG_PACKAGE_lucky=y
 CONFIG_PACKAGE_luci-app-lucky=y
 CONFIG_PACKAGE_luci-app-unblockneteasemusic=y
-CONFIG_PACKAGE_vlmcsd=y
-CONFIG_PACKAGE_luci-app-vlmcsd=y
 CONFIG_PACKAGE_easytier=y
 CONFIG_PACKAGE_luci-app-easytier=y
 # CONFIG_EASYTIER_INCLUDE_WEBCONSOLE is not set
 CONFIG_PACKAGE_zerotier=y
 CONFIG_PACKAGE_luci-app-zerotier=y
+CONFIG_PACKAGE_frpc=y
+CONFIG_PACKAGE_luci-app-frpc=y
+CONFIG_PACKAGE_socat=y
+CONFIG_PACKAGE_luci-app-socat=y
+CONFIG_PACKAGE_wget=y
