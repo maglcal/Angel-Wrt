@@ -6,6 +6,7 @@
 # 覆盖范围：
 #   - Lucky   ：用 danshui 源新版(lucky 2.27.x + LuCI 3.x) 覆盖 lede 源同名旧版(2.17.8/1.2.0)
 #   - EasyTier：官方源守护进程 + LuCI 成对拉取(版本由 version.mk 统一)，覆盖 lede 源 net/easytier
+#   - Socat 界面：lede 的 luci 源(openwrt-25.12 分支)已删 Lua 版 luci-app-socat，从 master 分支补回
 # 其余三个插件(网易云音乐解锁/KMS/ZeroTier)没有同名冲突，直接由 seed 选择即可。
 
 base="${HOME_PATH:-.}"
@@ -40,3 +41,19 @@ else
     echo "警告：EasyTier 源拉取失败，固件将不含 EasyTier 界面" >&2
 fi
 rm -rf "${EasyTier_tmp}"
+
+# ---------- luci-app-socat（coolsnowwolf/luci master 版；openwrt-25.12 分支已删此 Lua 界面） ----------
+# 界面自带 /etc/init.d/luci_socat 与 /etc/config/socat，socat 二进制由 seed 里的 packages 源 net/socat 提供。
+# Lua 老界面需要 luci-compat（会自动带上 luci-lua-runtime）。
+Socat_tmp="$(mktemp -d)"
+if git clone -q --depth=1 --filter=blob:none --sparse -b master https://github.com/coolsnowwolf/luci.git "${Socat_tmp}/luci"; then
+    git -C "${Socat_tmp}/luci" sparse-checkout set applications/luci-app-socat
+    mkdir -p "${base}/package/luci-app-socat"
+    cp -Rf "${Socat_tmp}/luci/applications/luci-app-socat/." "${base}/package/luci-app-socat/"
+    sed -i 's#include ../../luci.mk#include $(TOPDIR)/feeds/luci/luci.mk#' "${base}/package/luci-app-socat/Makefile"
+    sed -i 's/^LUCI_DEPENDS:=+socat$/LUCI_DEPENDS:=+socat +luci-compat/' "${base}/package/luci-app-socat/Makefile"
+    echo "luci-app-socat 界面已就位（master 分支 Lua 版，补 +luci-compat 依赖）"
+else
+    echo "警告：luci-app-socat 源拉取失败，固件将只含 socat 命令行、无 Web 界面" >&2
+fi
+rm -rf "${Socat_tmp}"
