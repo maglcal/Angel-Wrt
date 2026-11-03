@@ -1,0 +1,102 @@
+#!/bin/sh
+# Angel-Wrt 主路由/旁路由模式切换（网页设置向导与本命令共用同一套逻辑）
+#
+# 用法：
+#   angel-mode status              查看当前模式
+#   angel-mode main [--no-reboot]  切主路由：10.0.0.1、DHCP 开、WAN 独立、防火墙/NAT 开
+#   angel-mode bypass [--no-reboot] 切旁路由：10.0.0.2、DHCP 关、网关/DNS=10.0.0.1、
+#                                  WAN 口并入 LAN、防火墙关、IP 转发开
+#
+# 模式落盘在 /etc/angel-mode.state（sysupgrade 保留），首次开机未选择时
+# 默认主路由形态，网页向导会一直弹出直到选定。
+
+STATE_FILE=/etc/angel-mode.state
+MAIN_IP="10.0.0.1"
+BYPASS_IP="10.0.0.2"
+NETMASK="255.255.254.0"
+GATEWAY="10.0.0.1"
+
+MODE="$1"
+NOREBOOT="$2"
+
+usage() {
+    sed -n '2,13p' "$0" | sed 's/^# \{0,1\}//'
+}
+
+# 定位 br-lan 的 device 配置段
+find_brlan() {
+    uci show network 2>/dev/null | grep -E "^network\.[^.]+\.name='br-lan'$" | head -n 1 | cut -d. -f 2
+}
+
+apply_main() {
+    uci set network.lan.ipaddr="$MAIN_IP"
+    uci set network.lan.netmask="$NETMASK"
+    uci -q delete network.lan.gateway
+    uci -q delete network.lan.dns
+    uci set system.@system[0].hostname="OpenWrt-Angel"
+    uci -q delete dhcp.lan.ignore
+    uci -q delete dhcp.@dnsmasq[0].server
+    uci -q delete dhcp.@dnsmasq[0].noresolv
+    uci set dhcp.@dnsmasq[0].rebind_protection="1"
+    # WAN 口恢复独立（eth1），防火墙/NAT 恢复
+    brlan="$(find_brlan)"
+    [ -n "$brlan" ] && uci -q del_list network."$brlan".ports="eth1"
+    uci set network.wan=interface
+    uci set network.wan.device="eth1"
+    uci set network.wan.proto="dhcp"
+    uci set network.wan6=interface
+    uci set network.wan6.device="eth1"
+    uci set network.wan6.proto="dhcpv6"
+    uci commit
+    /etc/init.d/firewall enable
+    echo main > "$STATE_FILE"
+}
+
+apply_bypass() {
+    uci set network.lan.ipaddr="$BYPASS_IP"
+    uci set network.lan.netmask="$NETMASK"
+    uci set network.lan.gateway="$GATEWAY"
+    uci set network.lan.dns="$GATEWAY"
+    uci set system.@system[0].hostname="OpenWrt-Angel-Bypass"
+    uci set dhcp.lan.ignore="1"
+    uci set dhcp.@dnsmasq[0].noresolv="1"
+    uci set dhcp.@dnsmasq[0].server="$GATEWAY"
+    uci set dhcp.@dnsmasq[0].rebind_protection="0"
+    # WAN 口并入 LAN（全口交换机形态），关防火墙，开转发
+    brlan="$(find_brlan)"
+    [ -n "$brlan" ] && uci -q add_list network."$brlan".ports="eth1"
+    uci -q delete network.wan
+    uci -q delete network.wan6
+    uci commit
+    /etc/init.d/firewall disable
+    sysctl -w net.ipv4.ip_forward=1 >/dev/null 2>&1
+    echo bypass > "$STATE_FILE"
+}
+
+case "$MODE" in
+    status)
+        if [ -f "$STATE_FILE" ]; then
+            echo "当前模式: $(cat "$STATE_FILE")"
+        else
+            echo "当前模式: 未选择（默认主路由形态，网页设置向导未确认）"
+        fi
+        exit 0
+        ;;
+    main)
+        apply_main
+        ;;
+    bypass)
+        apply_bypass
+        ;;
+    *)
+        usage
+        exit 1
+        ;;
+esac
+
+echo "已切换为 $MODE 模式"
+if [ "$NOREBOOT" != "--no-reboot" ]; then
+    echo "3 秒后重启生效..."
+    sleep 3
+    reboot
+fi

@@ -1,0 +1,41 @@
+#!/bin/sh
+# Angel-Wrt 首启模式向导后端（uhttpd CGI，仅 GET）
+#   ?state          -> {"ok":true,"configured":bool,"mode":"..."}
+#   ?apply=main     -> 应用主路由模式并重启
+#   ?apply=bypass   -> 应用旁路由模式并重启
+# 已配置后 apply 一律拒绝（防止局域网内未授权切换），切换请用 angel-mode 命令。
+
+echo "Content-Type: application/json"
+echo "Cache-Control: no-store"
+echo ""
+
+STATE_FILE=/etc/angel-mode.state
+
+[ "$REQUEST_METHOD" = "GET" ] || { echo '{"ok":false,"error":"method not allowed"}'; exit 0; }
+
+case "$QUERY_STRING" in
+    *apply=bypass*) ACTION=bypass ;;
+    *apply=main*)   ACTION=main ;;
+    *)              ACTION=state ;;
+esac
+
+if [ "$ACTION" = "state" ]; then
+    if [ -f "$STATE_FILE" ]; then
+        echo "{\"ok\":true,\"configured\":true,\"mode\":\"$(cat "$STATE_FILE")\"}"
+    else
+        echo '{"ok":true,"configured":false,"mode":"unconfigured"}'
+    fi
+    exit 0
+fi
+
+if [ -f "$STATE_FILE" ]; then
+    echo '{"ok":false,"error":"already configured; use angel-mode command"}'
+    exit 0
+fi
+
+if /usr/bin/angel-mode "$ACTION" --no-reboot >/dev/null 2>&1; then
+    ( sleep 2; reboot ) >/dev/null 2>&1 &
+    echo "{\"ok\":true,\"mode\":\"$ACTION\",\"rebooting\":true}"
+else
+    echo '{"ok":false,"error":"apply failed"}'
+fi

@@ -21,13 +21,12 @@ on:
         options:
           - 'master'
       CONFIG_FILE:
-        description: '请选择配置文件（x86_64=主路由版，x86_64-bypass=旁路由版）'
+        description: '请选择配置文件（主路由/旁路由不再分版编译，固件首次开机在网页向导里选）'
         required: true
         default: 'x86_64'
         type: choice
         options:
           - 'x86_64'
-          - 'x86_64-bypass'
       INFORMATION_NOTICE:
         description: 'Telegram或pushplus信息通知'
         required: true

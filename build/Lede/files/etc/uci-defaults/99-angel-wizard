@@ -1,0 +1,8 @@
+#!/bin/sh
+# 首启安装 Angel-Wrt 模式设置向导入口：
+# 把向导首页落到 /www/index.html（LuCI 入口），幂等、每次开机由 uci-defaults 机制只跑一次。
+# 向导选择的模式落盘 /etc/angel-mode.state，选定后入口页自动直跳 LuCI。
+
+[ -f /www/angel-index.html ] && cp -f /www/angel-index.html /www/index.html
+
+exit 0
