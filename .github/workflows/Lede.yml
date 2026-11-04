@@ -21,12 +21,13 @@ on:
         options:
           - 'master'
       CONFIG_FILE:
-        description: '请选择配置文件（主路由/旁路由不再分版编译，固件首次开机在网页向导里选）'
+        description: '请选择配置文件（x86_64=完整版；x86_64-lite=精简版，砍显卡/声卡/服务器网卡驱动，独立更新渠道 Update-x86-Lite）'
         required: true
         default: 'x86_64'
         type: choice
         options:
           - 'x86_64'
+          - 'x86_64-lite'
       INFORMATION_NOTICE:
         description: 'Telegram或pushplus信息通知'
         required: true
