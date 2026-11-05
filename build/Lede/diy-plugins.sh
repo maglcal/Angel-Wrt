@@ -7,6 +7,7 @@
 #   - Lucky   ：用 danshui 源新版(lucky 2.27.x + LuCI 3.x) 覆盖 lede 源同名旧版(2.17.8/1.2.0)
 #   - EasyTier：官方源守护进程 + LuCI 成对拉取(版本由 version.mk 统一)，覆盖 lede 源 net/easytier
 #   - Socat 界面：lede 的 luci 源(openwrt-25.12 分支)已删 Lua 版 luci-app-socat，从 master 分支补回
+#   - OpenList2：sbwml 源（openlist2 4.2.9 + LuCI），版本比 coolsnowwolf/packages 的 net/openlist(4.2.7) 新
 # 其余三个插件(网易云音乐解锁/KMS/ZeroTier)没有同名冲突，直接由 seed 选择即可。
 
 base="${HOME_PATH:-.}"
@@ -57,3 +58,18 @@ else
     echo "警告：luci-app-socat 源拉取失败，固件将只含 socat 命令行、无 Web 界面" >&2
 fi
 rm -rf "${Socat_tmp}"
+
+# ---------- OpenList2（sbwml 源：openlist2 守护进程 + LuCI 成对） ----------
+# 版本跟随 https://github.com/sbwml/luci-app-openlist2（openlist2 4.2.9，OpenListTeam 官方源码构建），
+# 比 coolsnowwolf/packages 的 net/openlist(4.2.7) 新；seed 里选 openlist2/luci-app-openlist2，
+# feeds 里的 net/openlist 不会被选中，互不冲突。Makefile 已用 $(TOPDIR) 绝对路径，无需 sed。
+OpenList2_tmp="$(mktemp -d)"
+if git clone -q --depth=1 https://github.com/sbwml/luci-app-openlist2.git "${OpenList2_tmp}/src"; then
+    mkdir -p "${base}/package/openlist2" "${base}/package/luci-app-openlist2"
+    cp -Rf "${OpenList2_tmp}/src/openlist2/." "${base}/package/openlist2/"
+    cp -Rf "${OpenList2_tmp}/src/luci-app-openlist2/." "${base}/package/luci-app-openlist2/"
+    echo "OpenList2 插件已就位（sbwml 源，openlist2 + LuCI 成对）"
+else
+    echo "警告：OpenList2 源拉取失败，固件将不含 OpenList" >&2
+fi
+rm -rf "${OpenList2_tmp}"
