@@ -34,7 +34,7 @@ jobs:
 
     steps:
     - name: 释放Ubuntu磁盘空间
-      uses: angel-Xn/free-disk-space@main
+      uses: angel-Xn/common/free-disk-space@main
       with:
         remove_android: true
         remove_dotnet: true

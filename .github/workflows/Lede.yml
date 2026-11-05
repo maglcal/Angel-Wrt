@@ -140,7 +140,7 @@ jobs:
     
     - name: 清理releases和workflows
       continue-on-error: true
-      uses: angel-Xn/delete-releases-workflows@main
+      uses: angel-Xn/common/delete-releases-workflows@main
       with:
         delete_releases: true
         prerelease_option: all
