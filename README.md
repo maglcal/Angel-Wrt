@@ -25,7 +25,7 @@ build/Lede/
 
 ## 依赖
 
-- 复合 action：[maglcal/common](https://github.com/maglcal/common)（mishi / need / message / trigger）
+- 复合 action：[angel-Xn/common](https://github.com/angel-Xn/common)（mishi / need / message / trigger）
 - 需要仓库 Secret：`REPO_TOKEN`（PAT，需 repo + workflow 权限，用于入口触发编译主程序）
 
 ## 致谢

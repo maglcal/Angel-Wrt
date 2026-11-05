@@ -18,7 +18,7 @@ Lucky_ver="3.5.0"
 
 # ---------- Lucky（danshui 源界面 + 守护进程升到 Lucky_ver） ----------
 Lucky_tmp="$(mktemp -d)"
-if git clone -q --depth=1 --filter=blob:none --sparse -b Lede https://github.com/maglcal/openwrt-package.git "${Lucky_tmp}/owpkg"; then
+if git clone -q --depth=1 --filter=blob:none --sparse -b Lede https://github.com/angel-Xn/openwrt-package.git "${Lucky_tmp}/owpkg"; then
     git -C "${Lucky_tmp}/owpkg" sparse-checkout set luci-app-lucky
     mkdir -p "${base}/package/lucky" "${base}/package/luci-app-lucky"
     cp -Rf "${Lucky_tmp}/owpkg/luci-app-lucky/lucky/." "${base}/package/lucky/"
