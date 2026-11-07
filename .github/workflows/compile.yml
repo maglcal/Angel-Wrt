@@ -55,7 +55,7 @@ jobs:
       env:
         DEBIAN_FRONTEND: noninteractive
       run: |
-        sudo bash -c 'bash <(curl -fsSL https://github.com/angel-Xn/common/raw/main/custom/ubuntu.sh)'
+        sudo bash -c 'curl -fsSL --retry 3 --retry-delay 5 --max-time 120 -o /tmp/ubuntu_setup.sh https://github.com/angel-Xn/common/raw/main/custom/ubuntu.sh && bash /tmp/ubuntu_setup.sh || { echo "ubuntu.sh 获取或执行失败"; exit 1; }'
         sudo timedatectl set-timezone "$TZ"
         sudo mkdir -p /${{ env.DIY_WORK }}
         sudo chown ${USER}:${GROUPS} /${{ env.DIY_WORK }}
