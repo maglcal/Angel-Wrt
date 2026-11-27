@@ -8,6 +8,9 @@
 #          下载 https://release.66666.host/v{ver}/{ver}_lucky/lucky_{ver}_Linux_{arch}.tar.gz
 #       ② GitHub releases/latest（代理轮询兜底，版本可能滞后）
 #       下载 → tar 校验 → 备份替换 /usr/bin/lucky → 重启服务；失败自动回滚，不 reboot 整机。
+# 注意（2026-11-27）：Lucky 内置更新在本固件失效的另一嫌疑是 rootfs 分区余量不足
+#       （默认 448MB 被大件插件塞满，替换 ~50MB 新二进制写不进去），已把 rootfs 钉死
+#       1024MB，见 seed/x86_64；本脚本升级前也加了空间预检，空间不足会明确报错。
 # 用法（输出单行 JSON，供 LuCI rpc 解析）：
 #   lucky-upgrade check   查询最新版本  {"current":"3.5.0","latest":"3.8.1","update":true,"error":""}
 #   lucky-upgrade do      执行升级      {"current":"3.5.0","latest":"3.8.1","installed":"3.8.1","error":""}
@@ -153,6 +156,13 @@ do_upgrade() {
                 return 1
             fi
             chmod 755 "$_newbin"
+            # 空间预检：新二进制要写进根分区(overlay)，余量不足会静默失败、重启后版本不变
+            _free_kb="$(df -k / 2>/dev/null | awk 'NR==2{print $4}')"
+            _need_kb=$(( $(wc -c < "$_newbin") / 1024 + 2048 ))
+            if [ -n "$_free_kb" ] && [ "$_free_kb" -lt "$_need_kb" ]; then
+                out_json "$_cur" "$_latest" "" false "根分区剩余空间不足(需${_need_kb}KB,余${_free_kb}KB)，请扩容固件 rootfs 分区"
+                return 1
+            fi
             cp -f "$BIN" "$BIN.bak" 2>/dev/null
             if ! cp -f "$_newbin" "$BIN.new" 2>/dev/null; then
                 out_json "$_cur" "$_latest" "" false "写入 /usr/bin/lucky.new 失败(空间不足?)"

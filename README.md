@@ -23,6 +23,14 @@ build/Lede/
   relevance/start # 触发文件（入口 workflow 通过改动它触发编译）
 ```
 
+## 在线更新行为说明
+
+固件内置 luci-app-autoupdate（系统 → 在线更新）从本仓库 Release 拉固件升级：
+
+- **主路由/旁路由模式**：落盘 `/etc/angel-mode.state`，已加入 sysupgrade 保留清单（`/lib/upgrade/keep.d/10-angel-mode`），升级后不会重新弹设置向导。
+- **手动安装的插件**：更新前会自动落盘 opkg 已安装清单（`/etc/angel-pkg.list`）并随备份保留，升级后由 `angel-pkg-restore` 服务开机自动重装缺失插件（需外网可达软件源）。
+- **rootfs 分区**：自 2026-11-27 起钉死 1024MB（原默认 448MB 被大件插件占满，余量不足会导致 Lucky 等自带在线更新的程序替换二进制失败）。**从旧固件首次在线升级到本版本时分区布局变化，会整盘写入一次**：除上述保留清单外的数据（含手装插件文件）该次会清空，之后每次更新都是分区级写入、保留全部数据。
+
 ## 依赖
 
 - 复合 action：[angel-Xn/common](https://github.com/angel-Xn/common)（mishi / need / message / trigger）

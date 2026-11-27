@@ -1,0 +1,47 @@
+#!/bin/sh /etc/rc.common
+# Angel-Wrt: 手装插件恢复服务
+#
+# 背景：固件在线更新（luci-app-autoupdate）若触发整盘写入（分区表变化），
+#       overlay 上的手动安装插件会随 rootfs_data 一起被清掉。
+#       更新前 /etc/deletefile 会把当前 opkg 已安装清单写到 /etc/angel-pkg.list，
+#       该清单随 sysupgrade 备份保留（见 /lib/upgrade/keep.d/10-angel-mode）。
+# 行为：开机后比对清单与实际安装情况，缺失的插件自动尝试 opkg 重装
+#       （需要外网可达软件源；固件内置的包新镜像里本来就有，不会重复装）。
+# 手动执行：/etc/init.d/angel-pkg-restore start
+
+START=99
+
+PKG_LIST=/etc/angel-pkg.list
+LOGTAG="angel-pkg-restore"
+
+list_missing() {
+    _missing=""
+    for _pkg in $(awk '{print $1}' "$PKG_LIST" 2>/dev/null); do
+        opkg list-installed 2>/dev/null | grep -q "^${_pkg} " || _missing="$_missing ${_pkg}"
+    done
+    echo "${_missing# }"
+}
+
+restore_pkgs() {
+    [ -s "$PKG_LIST" ] || return 0
+    command -v opkg >/dev/null 2>&1 || return 0
+    _missing="$(list_missing)"
+    [ -n "$_missing" ] || return 0
+    logger -t "$LOGTAG" "检测到缺失插件:${_missing}，尝试从软件源恢复"
+    opkg update >/dev/null 2>&1
+    for _pkg in $_missing; do
+        if opkg install "$_pkg" >/dev/null 2>&1; then
+            logger -t "$LOGTAG" "已恢复 ${_pkg}"
+        else
+            logger -t "$LOGTAG" "恢复失败 ${_pkg}（软件源不存在或网络不可达，可手动安装）"
+        fi
+    done
+}
+
+start() {
+    restore_pkgs
+}
+
+boot() {
+    restore_pkgs
+}

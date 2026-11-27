@@ -97,4 +97,8 @@ EOF
 
 # 在线更新时，删除不想保留固件的某个文件，在EOF跟EOF之间加入删除代码，记住这里对应的是固件的文件路径，比如： rm -rf /etc/config/luci
 cat >>$DELETE <<-EOF
+# Angel(2026-11-27): 保留配置更新前，把当前 opkg 已安装清单落盘到 /etc/angel-pkg.list。
+# 该清单随 sysupgrade 备份保留（/lib/upgrade/keep.d/10-angel-mode），整盘写入后
+# 由 /etc/init.d/angel-pkg-restore 开机比对并自动重装缺失的手动安装插件。
+opkg list-installed > /etc/angel-pkg.list 2>/dev/null
 EOF

@@ -1,0 +1,10 @@
+# Angel-Wrt sysupgrade 保留清单（该目录下文件会被 sysupgrade -b 打进备份包，整盘写入后随备份恢复）
+# 背景：固件在线更新走 luci-app-autoupdate（sysupgrade）。
+#   分区表一致时 rootfs_data 整体保留，运行时文件天然都在；
+#   分区表不一致（例如 rootfs 分区扩容后的首次升级）会整盘写入，此时只恢复
+#   /etc/sysupgrade.conf 清单文件 + 本目录清单文件。
+# /etc/angel-mode.state：主路由/旁路由模式落盘文件，丢了会重新弹设置向导。
+# /etc/angel-pkg.list：更新前由 /etc/deletefile 生成的 opkg 已安装清单，
+#   配合 /etc/init.d/angel-pkg-restore 在开机后自动恢复手装插件。
+/etc/angel-mode.state
+/etc/angel-pkg.list
