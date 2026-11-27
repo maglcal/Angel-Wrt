@@ -55,7 +55,10 @@ resolve_gateway() {
 		custom) _gw="$(uci -q get "${CONFIG}.$1.gateway")" ;;
 		gw_main) _gw='10.0.0.1' ;;
 		gw_bypass) _gw='10.0.0.2' ;;
-		*) return 1 ;;
+		*)
+			# 自定义网关预设：LuCI 生成的匿名段名（如 cfgxxxxxx），从 gateway_preset 段读 address
+			[ "$(uci -q get "${CONFIG}.${_mode}")" = 'gateway_preset' ] || return 1
+			_gw="$(uci -q get "${CONFIG}.${_mode}.address")" ;;
 	esac
 	[ -z "$_gw" ] || ip_ok "$_gw" || return 1
 	printf '%s' "$_gw"
