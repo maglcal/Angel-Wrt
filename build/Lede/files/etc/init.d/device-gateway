@@ -1,0 +1,24 @@
+#!/bin/sh /etc/rc.common
+# Angel-Wrt 自研：设备网关规则同步服务
+# START=18 早于 dnsmasq(19)，保证开机时 conf 先生成、dnsmasq 启动时即加载。
+
+START=18
+STOP=89
+USE_PROCD=1
+
+start_service() {
+	/usr/libexec/device-gateway-sync
+}
+
+reload_service() {
+	/usr/libexec/device-gateway-sync
+}
+
+stop_service() {
+	DG_DISABLE=1 /usr/libexec/device-gateway-sync
+}
+
+service_triggers() {
+	# UCI 提交后再同步，避免读到未落盘的半截配置
+	procd_add_reload_trigger 'device-gateway'
+}

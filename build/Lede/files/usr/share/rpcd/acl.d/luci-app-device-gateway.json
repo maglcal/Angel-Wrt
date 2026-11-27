@@ -1,0 +1,17 @@
+{
+	"luci-app-device-gateway": {
+		"description": "按设备下发固定 IPv4、网关与 DNS",
+		"read": {
+			"file": { "/tmp/device-gateway.status": [ "read" ] },
+			"uci": [ "device-gateway" ],
+			"ubus": {
+				"network.interface": [ "dump" ],
+				"luci-rpc": [ "getHostHints" ],
+				"file": [ "read" ]
+			}
+		},
+		"write": {
+			"uci": [ "device-gateway" ]
+		}
+	}
+}

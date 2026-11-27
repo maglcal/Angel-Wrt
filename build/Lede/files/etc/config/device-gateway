@@ -1,0 +1,14 @@
+
+config settings 'main'
+	option enabled '1'
+
+# 网关预设由 LuCI 页面管理，示例（默认主路由 10.0.0.1 / 旁路由 10.0.0.2 为内置选项）：
+# config gateway_preset 'gw_bypass'
+# 	option label '旁路由'
+# 	option address '10.0.0.2'
+
+# config rule
+# 	option mac 'aa:bb:cc:dd:ee:ff'
+# 	option ip '10.0.0.100'
+# 	option gateway_mode 'gw_bypass'
+# 	option dns_mode 'ali'
