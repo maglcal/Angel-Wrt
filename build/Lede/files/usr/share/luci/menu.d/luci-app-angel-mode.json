@@ -1,0 +1,13 @@
+{
+	"admin/system/angel-mode": {
+		"title": "主路由/旁路由切换",
+		"order": 15,
+		"action": {
+			"type": "view",
+			"path": "angel-mode"
+		},
+		"depends": {
+			"acl": [ "luci-app-angel-mode" ]
+		}
+	}
+}

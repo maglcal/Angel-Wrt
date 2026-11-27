@@ -1,0 +1,63 @@
+#!/usr/bin/ucode
+/*
+ * Angel-Wrt 主路由/旁路由切换 RPC
+ * 与 /usr/bin/angel-mode 共用同一套配置逻辑，仅允许已登录且具 ACL 的用户调用
+ */
+
+'use strict';
+
+import { access, readfile, popen } from 'fs';
+
+const STATE_FILE = '/etc/angel-mode.state';
+const BIN = '/usr/bin/angel-mode';
+
+function firstline(s) {
+	return s ? trim(s) : '';
+}
+
+function uci_get(path) {
+	const fd = popen(`/sbin/uci get ${path} 2>/dev/null`);
+	if (!fd)
+		return '';
+	const out = firstline(fd.read('all'));
+	fd.close();
+	return out;
+}
+
+const methods = {
+	status: {
+		call: function() {
+			let mode = 'unconfigured';
+			if (access(STATE_FILE))
+				mode = firstline(readfile(STATE_FILE));
+
+			return {
+				mode: mode,
+				configured: (mode === 'main' || mode === 'bypass'),
+				ip: uci_get('network.lan.ipaddr'),
+				hostname: uci_get('system.@system[0].hostname')
+			};
+		}
+	},
+
+	apply: {
+		args: { mode: 'mode' },
+		call: function(req) {
+			const m = req.args?.mode;
+			if (m !== 'main' && m !== 'bypass')
+				return { status: 255, error: 'invalid mode' };
+			if (!access(BIN))
+				return { status: 255, error: 'angel-mode not found' };
+
+			/* 先落配置不重启，再后台延迟重启，保证 RPC 响应能正常返回 */
+			const rc = system(`${BIN} ${m} --no-reboot >/dev/null 2>&1`);
+			if (rc !== 0)
+				return { status: rc, error: 'apply failed' };
+			system('( sleep 3; reboot ) >/dev/null 2>&1 &');
+
+			return { status: 0, mode: m, rebooting: true };
+		}
+	}
+};
+
+return methods;

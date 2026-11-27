@@ -1,0 +1,19 @@
+{
+	"luci-app-angel-mode": {
+		"description": "Angel-Wrt 主路由/旁路由模式切换",
+		"read": {
+			"ubus": {
+				"luci.angel": [ "*" ]
+			},
+			"file": {
+				"/usr/bin/angel-mode": [ "exec" ],
+				"/sbin/reboot": [ "exec" ]
+			}
+		},
+		"write": {
+			"ubus": {
+				"luci.angel": [ "*" ]
+			}
+		}
+	}
+}
