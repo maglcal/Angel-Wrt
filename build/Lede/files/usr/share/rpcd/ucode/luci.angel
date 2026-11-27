@@ -60,4 +60,6 @@ const methods = {
 	}
 };
 
-return methods;
+/* rpcd ucode 插件必须返回「对象名 → 方法表」映射，否则 luci.angel 对象不会注册，
+ * LuCI 侧调用报 -32000 Object not found（2026-11-27 实修） */
+return { 'luci.angel': methods };
