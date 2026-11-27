@@ -31,6 +31,18 @@ build/Lede/
 - **手动安装的插件**：更新前会自动落盘 opkg 已安装清单（`/etc/angel-pkg.list`）并随备份保留，升级后由 `angel-pkg-restore` 服务开机自动重装缺失插件（需外网可达软件源）。
 - **rootfs 分区**：自 2026-11-27 起钉死 1024MB（原默认 448MB 被大件插件占满，余量不足会导致 Lucky 等自带在线更新的程序替换二进制失败）。**从旧固件首次在线升级到本版本时分区布局变化，会整盘写入一次**：除上述保留清单外的数据（含手装插件文件）该次会清空，之后每次更新都是分区级写入、保留全部数据。
 
+## 内置软件
+
+除 lede 官方源外，固件额外内置（x86_64 版）：
+
+- **Lucky / EasyTier / OpenList2 / AdGuardHome / Tailscale / ZeroTier** 等网络工具（见 seed）
+- **PicoClaw**（v0.5.6，MIT）：轻量 AI Agent，Web 面板 18800 端口，LLM 配置在面板内完成；数据目录 `/etc/picoclaw`
+- **SongLoft**（v2.13.13，Apache-2.0）：自托管音乐服务器，Web 界面 58091 端口；数据 `/etc/songloft/data`，曲库目录 `/etc/songloft/music`（可在应用内改挂载磁盘）
+- **SQM CAKE 智能队列**（`网络 → SQM QoS`，配合 irqbalance/zram-swap 优化）
+- **ttyd 网页终端**、**irqbalance** 中断均衡、**zram-swap** 内存压缩
+
+lite 精简版仅含网络工具与 SQM/irqbalance/zram-swap，不含 PicoClaw/SongLoft 两个大件。第三方二进制均取自上游官方 GitHub Release，SHA-256 已人工比对官方 checksums.txt。
+
 ## 依赖
 
 - 复合 action：[angel-Xn/common](https://github.com/angel-Xn/common)（mishi / need / message / trigger）
