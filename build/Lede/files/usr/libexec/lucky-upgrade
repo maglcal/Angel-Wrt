@@ -1,0 +1,172 @@
+#!/bin/sh
+# Lucky 大吉在线更新 —— 修复固件里 Lucky 内置“检查更新/升级”不可用的问题
+# 根因：Lucky 自身的更新检测走 GitHub 直连（api.github.com / releases 下载），
+#       国内路由器无代理环境不可达，表现为检查失败或升级无响应。
+# 方案：固件侧提供独立升级通道，通道轮询与 luci-app-autoupdate(AutoUpgrade) 同源：
+#       GITHUB_PROXY(ghfast.top) → gh-proxy.com → ghproxy.net → gh.llkk.cc → 直连兜底
+#       下载 lucky_Linux_<arch>.tar.gz → 校验 → 备份替换 /usr/bin/lucky → 重启服务
+#       失败自动回滚旧二进制，不会把服务搞挂。
+# 用法（输出单行 JSON，供 LuCI rpc 解析）：
+#   lucky-upgrade check   查询最新版本  {"current":"3.5.0","latest":"3.6.0","update":true,"error":""}
+#   lucky-upgrade do      执行升级      {"current":"3.5.0","latest":"3.6.0","installed":"3.6.0","error":""}
+
+REPO_API="https://api.github.com/repos/gdy666/lucky/releases/latest"
+WORKDIR="/tmp/lucky-upgrade"
+BIN="/usr/bin/lucky"
+
+# 单行 JSON 输出（error 为空串表示成功）
+out_json() {
+    printf '{"current":"%s","latest":"%s","installed":"%s","update":%s,"error":"%s"}\n' \
+        "$1" "$2" "$3" "$4" "$(printf '%s' "$5" | sed 's/\\/\\\\/g; s/"/\\"/g' | tr -d '\n\r')"
+}
+
+# 通道列表：优先读 /etc/openwrt_update 里烧死的 GITHUB_PROXY
+proxy_list() {
+    _gp="https://ghfast.top"
+    [ -f /etc/openwrt_update ] && . /etc/openwrt_update 2>/dev/null
+    for _p in "${GITHUB_PROXY:-$_gp}" "https://gh-proxy.com" "https://ghproxy.net" "https://gh.llkk.cc" ""; do
+        printf '%s\n' "$_p"
+    done
+}
+
+# fetch <url> <outfile>：单通道下载，非空即成功
+fetch() {
+    ( uclient-fetch --no-check-certificate --timeout=30 "$1" -O "$2" >/dev/null 2>&1 ) || \
+    ( wget -q --no-check-certificate --timeout=30 -t 1 "$1" -O "$2" >/dev/null 2>&1 )
+    [ -s "$2" ]
+}
+
+# 多通道拉取 releases/latest API 快照
+api_fetch() {
+    mkdir -p "$WORKDIR"
+    for _p in $(proxy_list); do
+        rm -f "$WORKDIR/api.json"
+        [ -n "$_p" ] && _u="${_p}/${REPO_API}" || _u="${REPO_API}"
+        fetch "$_u" "$WORKDIR/api.json" || continue
+        grep -q '"tag_name"' "$WORKDIR/api.json" 2>/dev/null || continue
+        return 0
+    done
+    return 1
+}
+
+# 当前安装版本（优先读二进制自身 -info 输出，升级后 opkg 记录不会变）
+cur_version() {
+    _v="$($BIN -info -cd /etc/lucky 2>/dev/null | sed -n 's/.*"Version"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' | head -n 1)"
+    [ -n "$_v" ] && { echo "$_v"; return; }
+    _v="$(opkg info lucky 2>/dev/null | sed -n "s/^Version: \([0-9][0-9.]*\).*/\1/p" | head -n 1)"
+    echo "$_v"
+}
+
+# 云端最新版本（tag_name，剥 v 前缀）
+latest_version() {
+    sed -n 's/.*"tag_name"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' "$WORKDIR/api.json" | head -n 1 | sed 's/^v//'
+}
+
+# 版本比较：两者不同则返回 0（有更新）
+ver_differs() {
+    [ "$1" != "$2" ]
+}
+
+# Lucky 架构（优先用包自带的 luckyarch）
+lucky_arch() {
+    if [ -x /usr/bin/luckyarch ]; then
+        /usr/bin/luckyarch 2>/dev/null | head -n 1
+    else
+        uname -m
+    fi
+}
+
+# 多通道下载指定版本二进制包
+download_pkg() {
+    _ver="$1"
+    _arch="$(lucky_arch)"
+    _asset="lucky_${_ver}_Linux_${_arch}.tar.gz"
+    for _p in $(proxy_list); do
+        rm -rf "$WORKDIR/dl"
+        mkdir -p "$WORKDIR/dl"
+        [ -n "$_p" ] && _u="${_p}/https://github.com/gdy666/lucky/releases/download/v${_ver}/${_asset}" \
+                     || _u="https://github.com/gdy666/lucky/releases/download/v${_ver}/${_asset}"
+        fetch "$_u" "$WORKDIR/dl/pkg.tar.gz" || continue
+        # 校验 tar 包内确有 lucky 可执行文件
+        if tar -tzf "$WORKDIR/dl/pkg.tar.gz" 2>/dev/null | grep -q "lucky"; then
+            return 0
+        fi
+        rm -f "$WORKDIR/dl/pkg.tar.gz"
+    done
+    return 1
+}
+
+do_upgrade() {
+    _cur="$(cur_version)"
+    if api_fetch; then
+        _latest="$(latest_version)"
+    else
+        out_json "$_cur" "" "" false "无法获取云端版本(所有通道失败)"
+        return 1
+    fi
+    if [ -z "$_latest" ]; then
+        out_json "$_cur" "" "" false "云端版本解析失败"
+        return 1
+    fi
+    if ver_differs "$_cur" "$_latest"; then
+        if download_pkg "$_latest"; then
+            tar -xzf "$WORKDIR/dl/pkg.tar.gz" -C "$WORKDIR/dl" 2>/dev/null
+            _newbin="$(find "$WORKDIR/dl" -maxdepth 3 -type f -name lucky 2>/dev/null | head -n 1)"
+            if [ -z "$_newbin" ]; then
+                out_json "$_cur" "$_latest" "" false "压缩包内未找到 lucky 二进制"
+                return 1
+            fi
+            chmod 755 "$_newbin"
+            cp -f "$BIN" "$BIN.bak" 2>/dev/null
+            if ! cp -f "$_newbin" "$BIN.new" 2>/dev/null; then
+                out_json "$_cur" "$_latest" "" false "写入 /usr/bin/lucky.new 失败(空间不足?)"
+                return 1
+            fi
+            mv -f "$BIN.new" "$BIN"
+            /etc/init.d/lucky restart >/dev/null 2>&1
+            sleep 2
+            _chk="$($BIN -info -cd /etc/lucky 2>/dev/null | head -c 1)"
+            if [ -z "$_chk" ]; then
+                # 新二进制起不来，回滚
+                [ -f "$BIN.bak" ] && mv -f "$BIN.bak" "$BIN" && /etc/init.d/lucky restart >/dev/null 2>&1
+                out_json "$_cur" "$_latest" "" false "新版本启动校验失败，已回滚"
+                return 1
+            fi
+            rm -rf "$WORKDIR"
+            out_json "$_cur" "$_latest" "$_latest" true ""
+            return 0
+        else
+            out_json "$_cur" "$_latest" "" false "下载失败(所有通道)"
+            return 1
+        fi
+    else
+        rm -rf "$WORKDIR"
+        out_json "$_cur" "$_latest" "$_cur" false "已是最新版本"
+        return 0
+    fi
+}
+
+do_check() {
+    _cur="$(cur_version)"
+    if api_fetch; then
+        _latest="$(latest_version)"
+        if [ -z "$_latest" ]; then
+            out_json "$_cur" "" "" false "云端版本解析失败"
+            return 1
+        fi
+        if ver_differs "$_cur" "$_latest"; then
+            out_json "$_cur" "$_latest" "" true ""
+        else
+            out_json "$_cur" "$_latest" "" false ""
+        fi
+        return 0
+    fi
+    out_json "$_cur" "" "" false "无法获取云端版本(所有通道失败)"
+    return 1
+}
+
+case "$1" in
+    check) do_check ;;
+    do)    do_upgrade ;;
+    *)     echo "usage: lucky-upgrade check|do" >&2; exit 2 ;;
+esac

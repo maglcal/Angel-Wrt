@@ -1,0 +1,134 @@
+#!/usr/bin/ucode
+/*
+ * SPDX-License-Identifier: GPL-2.0-only
+ *
+ * Copyright (C) 2021-2026  sirpdboy  <herboy2008@gmail.com> https://github.com/sirpdboy/luci-app-lucky
+ */
+
+'use strict';
+
+import { access, error, lstat, popen, readfile, writefile } from 'fs';
+
+/* Kanged from ucode/luci */
+function shellquote(s) {
+	return `'${replace(s, "'", "'\\''")}'`;
+}
+
+/* 解析 lucky-upgrade 脚本输出的单行 JSON；失败返回统一结构 */
+function run_upgrade_script(mode) {
+	if (!access('/usr/libexec/lucky-upgrade'))
+		return { current: '', latest: '', installed: '', update: false, error: '升级脚本 /usr/libexec/lucky-upgrade 不存在' };
+
+	const fd = popen(`/usr/libexec/lucky-upgrade ${mode}`);
+	if (!fd)
+		return { current: '', latest: '', installed: '', update: false, error: '无法启动升级脚本' };
+
+	let out = fd.read('all');
+	fd.close();
+
+	if (!out || length(out) === 0)
+		return { current: '', latest: '', installed: '', update: false, error: '升级脚本无输出' };
+
+	try {
+		const res = json(out);
+		if (!res || type(res) != 'object')
+			throw 'not an object';
+		return res;
+	} catch (e) {
+		return { current: '', latest: '', installed: '', update: false, error: '输出解析失败: ' + e };
+	}
+}
+
+const methods = {
+	set_ConfInfo: {
+		args: { key: 'key', value: 'value' },
+		call: function(req) {
+			if (!access('/usr/bin/lucky'))
+				return { status: 255, error: 'lucky not found' };
+
+			if (!req.args?.key)
+				return { status: 255, error: 'missing key parameter' };
+
+			const key = shellquote(req.args.key);
+			const configPath = '/etc/lucky';
+			let exit_code = 255;
+
+			if (req.args.value !== null && req.args.value !== undefined) {
+				const value = shellquote(req.args.value);
+				exit_code = system(`/usr/bin/lucky -setconf -key ${key} -value ${value} -cd ${configPath}`);
+			} else {
+				// 未提供value时只设置key
+				exit_code = system(`/usr/bin/lucky -setconf -key ${key} -cd ${configPath}`);
+			}
+
+			return { status: exit_code };
+		}
+	},
+
+	get_baseInfo: {
+		call: function() {
+			if (!access('/usr/bin/lucky'))
+				return { ConfInfo: {}, error: 'lucky not found' };
+
+			const configPath = '/etc/lucky';
+			const fd = popen('/usr/bin/lucky -baseConfInfo -cd /etc/lucky');
+			if (fd) {
+				let config = fd.read('all');
+				fd.close();
+
+				if (!config || length(config) === 0)
+					return { ConfInfo: {}, error: 'empty response' };
+
+				try {
+					config = json(config);
+					return { ConfInfo: config };
+				} catch(e) {
+					return { ConfInfo: {}, error: 'JSON parse error: ' + e };
+				}
+			} else {
+				return { ConfInfo: {}, error: 'failed to execute lucky command' };
+			}
+		}
+	},
+
+	get_Info: {
+		call: function() {
+			if (!access('/usr/bin/lucky'))
+				return { Info: {}, error: 'lucky not found' };
+			const configPath = '/etc/lucky';
+			const fd = popen('/usr/bin/lucky -info -cd /etc/lucky');
+			if (fd) {
+				let config = fd.read('all');
+				fd.close();
+
+				if (!config || length(config) === 0)
+					return { Info: {}, error: 'empty response' };
+
+				try {
+					config = json(config);
+					return { Info: config };
+				} catch(e) {
+					return { Info: {}, error: 'JSON parse error: ' + e };
+				}
+			} else {
+				return { Info: {}, error: 'failed to execute lucky command' };
+			}
+		}
+	},
+
+	/* Angel (2026-11-27): 在线更新 —— 检查云端最新版本（走加速通道，修 Lucky 内置更新 GitHub 直连不可达） */
+	upgrade_check: {
+		call: function() {
+			return run_upgrade_script('check');
+		}
+	},
+
+	/* Angel (2026-11-27): 在线更新 —— 下载新版本替换 /usr/bin/lucky 并重启服务（失败自动回滚） */
+	upgrade_run: {
+		call: function() {
+			return run_upgrade_script('do');
+		}
+	}
+};
+
+return { 'luci.lucky': methods };

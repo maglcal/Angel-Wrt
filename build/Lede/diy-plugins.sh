@@ -30,6 +30,19 @@ else
 fi
 rm -rf "${Lucky_tmp}"
 
+# ---------- Lucky 在线更新覆盖层（Angel 2026-11-27） ----------
+# 源：本仓库 build/Lede/diy/lucky-override/（BUILD_DIY 已把它拷到 lede 根 ${base}/lucky-override）
+# 内容：config.js 加「在线更新」区块 + luci.lucky ucode 加 upgrade_check/upgrade_run rpc；
+#       配套升级脚本 build/Lede/files/usr/libexec/lucky-upgrade 走 files/ 进固件。
+# 必须 danshui 拷贝之后执行才能盖住同步源版本；danshui 上游若改版只需重做 override 两文件。
+if [[ -d "${base}/lucky-override" && -d "${base}/package/luci-app-lucky" ]]; then
+    cp -Rf "${base}/lucky-override/." "${base}/package/luci-app-lucky/"
+    rm -rf "${base}/lucky-override"
+    echo "Lucky 在线更新覆盖层已合并（config.js + luci.lucky ucode）"
+else
+    echo "警告：lucky-override 未合并（目录缺失或 Lucky 源拉取失败）" >&2
+fi
+
 # ---------- EasyTier（官方源，守护进程 + LuCI 成对） ----------
 EasyTier_tmp="$(mktemp -d)"
 if git clone -q --depth=1 https://github.com/EasyTier/luci-app-easytier.git "${EasyTier_tmp}/src"; then
