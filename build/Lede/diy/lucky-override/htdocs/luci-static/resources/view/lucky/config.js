@@ -106,7 +106,7 @@ function upgradeCall(rpcFn, btn, statusEl) {
     btn.disabled = true;
     statusEl.innerHTML = '<em>' + (rpcFn === 'upgrade_check' ? _('Checking for updates, please wait...') : _('Downloading and upgrading, this may take 1-3 minutes...')) + '</em>';
     const call = (rpcFn === 'upgrade_check') ? luckyUpgradeCheck : luckyUpgradeRun;
-    return L.resolveDefault(call, {}).then(function(res) {
+    return L.resolveDefault(call(), {}).then(function(res) {
         btn.disabled = false;
         btn.value = oldText;
         let html;
@@ -213,7 +213,7 @@ return view.extend({
                     E('button', {
                         'class': 'cbi-button cbi-button-apply',
                         'id': 'lucky_btn_check',
-                        'click': ui.createHandlerFn(function() {
+                        'click': ui.createHandlerFn(this, function() {
                             const btn = document.getElementById('lucky_btn_check');
                             const st = document.getElementById('lucky_upgrade_status');
                             return upgradeCall('upgrade_check', btn, st);
@@ -222,7 +222,7 @@ return view.extend({
                     E('button', {
                         'class': 'cbi-button cbi-button-action',
                         'id': 'lucky_btn_run',
-                        'click': ui.createHandlerFn(function() {
+                        'click': ui.createHandlerFn(this, function() {
                             const btn = document.getElementById('lucky_btn_run');
                             const st = document.getElementById('lucky_upgrade_status');
                             if (!window.confirm(_('Download and upgrade Lucky now? The service will restart automatically.')))

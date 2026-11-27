@@ -1,15 +1,18 @@
 #!/bin/sh
-# Lucky 大吉在线更新 —— 修复固件里 Lucky 内置“检查更新/升级”不可用的问题
-# 根因：Lucky 自身的更新检测走 GitHub 直连（api.github.com / releases 下载），
-#       国内路由器无代理环境不可达，表现为检查失败或升级无响应。
-# 方案：固件侧提供独立升级通道，通道轮询与 luci-app-autoupdate(AutoUpgrade) 同源：
-#       GITHUB_PROXY(ghfast.top) → gh-proxy.com → ghproxy.net → gh.llkk.cc → 直连兜底
-#       下载 lucky_Linux_<arch>.tar.gz → 校验 → 备份替换 /usr/bin/lucky → 重启服务
-#       失败自动回滚旧二进制，不会把服务搞挂。
+# Lucky 大吉在线更新 —— 修复固件里 Lucky 内置“更新程序”失效的问题
+# 根因（2026-11-27 实证）：作者把 3.8.1 等新版放在自建官网文件站 release.66666.host，
+#       GitHub releases 只停在 3.5.0。Lucky 内置更新走官网，但下载/替换/重启链路失败，
+#       表现为更新后整机 reboot 但版本仍是旧的；LuCI 侧原也无可更新入口。
+# 方案：固件侧独立升级通道，双数据源：
+#       ① 官网文件站 release.66666.host（国内直连，主源）——目录列表解析最新 vX.Y.Z，
+#          下载 https://release.66666.host/v{ver}/{ver}_lucky/lucky_{ver}_Linux_{arch}.tar.gz
+#       ② GitHub releases/latest（代理轮询兜底，版本可能滞后）
+#       下载 → tar 校验 → 备份替换 /usr/bin/lucky → 重启服务；失败自动回滚，不 reboot 整机。
 # 用法（输出单行 JSON，供 LuCI rpc 解析）：
-#   lucky-upgrade check   查询最新版本  {"current":"3.5.0","latest":"3.6.0","update":true,"error":""}
-#   lucky-upgrade do      执行升级      {"current":"3.5.0","latest":"3.6.0","installed":"3.6.0","error":""}
+#   lucky-upgrade check   查询最新版本  {"current":"3.5.0","latest":"3.8.1","update":true,"error":""}
+#   lucky-upgrade do      执行升级      {"current":"3.5.0","latest":"3.8.1","installed":"3.8.1","error":""}
 
+RELEASE_SITE="https://release.66666.host"
 REPO_API="https://api.github.com/repos/gdy666/lucky/releases/latest"
 WORKDIR="/tmp/lucky-upgrade"
 BIN="/usr/bin/lucky"
@@ -57,9 +60,31 @@ cur_version() {
     echo "$_v"
 }
 
-# 云端最新版本（tag_name，剥 v 前缀）
+# 官网版本检测：从文件站首页目录列表解析 ./vX.Y.Z/ 链接，取版本号最大的一个（国内直连，版本领先 GitHub）
+# 结果写入 $WORKDIR/site_version，成功返回 0
+site_fetch_version() {
+    mkdir -p "$WORKDIR"
+    fetch "$RELEASE_SITE/" "$WORKDIR/site_index.html" || return 1
+    _v="$(sed -n 's/.*\.\/v\([0-9][0-9.]*\)\/.*/\1/p' "$WORKDIR/site_index.html" 2>/dev/null | sort -t. -k1,1n -k2,2n -k3,3n | tail -n 1)"
+    [ -n "$_v" ] || return 1
+    printf '%s\n' "$_v" > "$WORKDIR/site_version"
+    return 0
+}
+
+# 云端最新版本：优先官网（领先 GitHub），失败回退 GitHub tag_name
 latest_version() {
-    sed -n 's/.*"tag_name"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' "$WORKDIR/api.json" | head -n 1 | sed 's/^v//'
+    [ -s "$WORKDIR/site_version" ] && { cat "$WORKDIR/site_version"; return; }
+    sed -n 's/.*"tag_name"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' "$WORKDIR/api.json" 2>/dev/null | head -n 1 | sed 's/^v//'
+}
+
+# 拉取云端版本信息：官网优先，GitHub 兜底（两者都失败才算失败）
+fetch_version_info() {
+    mkdir -p "$WORKDIR"
+    rm -f "$WORKDIR/site_version"
+    if site_fetch_version; then
+        return 0
+    fi
+    api_fetch
 }
 
 # 版本比较：两者不同则返回 0（有更新）
@@ -76,29 +101,40 @@ lucky_arch() {
     fi
 }
 
-# 多通道下载指定版本二进制包
+# 下载指定版本二进制包：官网文件站直连优先（版本最新且国内可达），GitHub 代理轮询兜底
 download_pkg() {
     _ver="$1"
     _arch="$(lucky_arch)"
     _asset="lucky_${_ver}_Linux_${_arch}.tar.gz"
-    for _p in $(proxy_list); do
+
+    _try_url() {
         rm -rf "$WORKDIR/dl"
         mkdir -p "$WORKDIR/dl"
-        [ -n "$_p" ] && _u="${_p}/https://github.com/gdy666/lucky/releases/download/v${_ver}/${_asset}" \
-                     || _u="https://github.com/gdy666/lucky/releases/download/v${_ver}/${_asset}"
-        fetch "$_u" "$WORKDIR/dl/pkg.tar.gz" || continue
+        fetch "$1" "$WORKDIR/dl/pkg.tar.gz" || return 1
         # 校验 tar 包内确有 lucky 可执行文件
         if tar -tzf "$WORKDIR/dl/pkg.tar.gz" 2>/dev/null | grep -q "lucky"; then
             return 0
         fi
         rm -f "$WORKDIR/dl/pkg.tar.gz"
+        return 1
+    }
+
+    # ① 官网：{site}/v{ver}/{ver}_lucky/lucky_{ver}_Linux_{arch}.tar.gz
+    _try_url "${RELEASE_SITE}/v${_ver}/${_ver}_lucky/${_asset}" && return 0
+    # ② 官网备用镜像 lucky666.cn/release
+    _try_url "https://lucky666.cn/release/v${_ver}/${_ver}_lucky/${_asset}" && return 0
+    # ③ GitHub 代理轮询（版本若已在 GitHub 发布则可用）
+    for _p in $(proxy_list); do
+        [ -n "$_p" ] && _u="${_p}/https://github.com/gdy666/lucky/releases/download/v${_ver}/${_asset}" \
+                     || _u="https://github.com/gdy666/lucky/releases/download/v${_ver}/${_asset}"
+        _try_url "$_u" && return 0
     done
     return 1
 }
 
 do_upgrade() {
     _cur="$(cur_version)"
-    if api_fetch; then
+    if fetch_version_info; then
         _latest="$(latest_version)"
     else
         out_json "$_cur" "" "" false "无法获取云端版本(所有通道失败)"
@@ -148,7 +184,7 @@ do_upgrade() {
 
 do_check() {
     _cur="$(cur_version)"
-    if api_fetch; then
+    if fetch_version_info; then
         _latest="$(latest_version)"
         if [ -z "$_latest" ]; then
             out_json "$_cur" "" "" false "云端版本解析失败"
