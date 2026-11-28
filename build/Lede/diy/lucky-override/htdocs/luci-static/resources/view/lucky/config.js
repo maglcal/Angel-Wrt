@@ -104,35 +104,35 @@ function renderStatus(isRunning, webport, safe_url, protocol, version) {
 function upgradeCall(rpcFn, btn, statusEl) {
     const oldText = btn.value;
     btn.disabled = true;
-    statusEl.innerHTML = '<em>' + (rpcFn === 'upgrade_check' ? _('Checking for updates, please wait...') : _('Downloading and upgrading, this may take 1-3 minutes...')) + '</em>';
+    statusEl.innerHTML = '<em>' + (rpcFn === 'upgrade_check' ? _('正在检查更新，请稍候…') : _('正在下载并升级，约需 1-3 分钟…')) + '</em>';
     const call = (rpcFn === 'upgrade_check') ? luckyUpgradeCheck : luckyUpgradeRun;
     return L.resolveDefault(call(), {}).then(function(res) {
         btn.disabled = false;
         btn.value = oldText;
         let html;
         if (!res || res.error) {
-            html = '<span style="color:red">' + _('Update check failed') + ': ' + ((res && res.error) ? res.error : _('no response')) + '</span>';
+            html = '<span style="color:red">' + _('检查更新失败') + ': ' + ((res && res.error) ? res.error : _('无响应')) + '</span>';
         } else if (rpcFn === 'upgrade_check') {
             if (res.update) {
-                html = '<span style="color:#e07a00">' + String.format(_('New version available: %s (current %s)'), res.latest, res.current) + '</span>';
+                html = '<span style="color:#e07a00">' + String.format(_('发现新版本：%s（当前 %s）'), res.latest, res.current) + '</span>';
             } else {
-                html = '<span style="color:green">' + String.format(_('Already the latest version: %s'), res.current || res.latest) + '</span>';
+                html = '<span style="color:green">' + String.format(_('已是最新版本：%s'), res.current || res.latest) + '</span>';
             }
         } else {
             if (res.error) {
-                html = '<span style="color:red">' + _('Upgrade failed') + ': ' + res.error + '</span>';
+                html = '<span style="color:red">' + _('升级失败') + ': ' + res.error + '</span>';
             } else {
-                html = '<span style="color:green">' + String.format(_('Upgrade success: %s -> %s'), res.current, res.installed) + '</span>';
+                html = '<span style="color:green">' + String.format(_('升级成功：%s → %s'), res.current, res.installed) + '</span>';
             }
         }
         statusEl.innerHTML = html;
         if (rpcFn === 'upgrade_run' && res && !res.error && res.installed) {
-            ui.addNotification(null, E('p', {}, String.format(_('Lucky upgraded to %s, service restarted.'), res.installed)), 'info');
+            ui.addNotification(null, E('p', {}, String.format(_('Lucky 已升级到 %s，服务已重启。'), res.installed)), 'info');
         }
     }).catch(function(err) {
         btn.disabled = false;
         btn.value = oldText;
-        statusEl.innerHTML = '<span style="color:red">' + _('Update request failed') + ': ' + err + '</span>';
+        statusEl.innerHTML = '<span style="color:red">' + _('更新请求失败') + ': ' + err + '</span>';
     });
 }
 
@@ -208,7 +208,7 @@ return view.extend({
 
         s.render = function() {
             return E('div', { class: 'cbi-section', id: 'lucky_upgrade_bar' }, [
-                E('div', { class: 'cbi-section-descr' }, _('Online update: check the latest version from GitHub via accelerated channels and upgrade /usr/bin/lucky automatically (auto rollback on failure). The built-in update page of Lucky uses direct GitHub access, which is unreachable in most cases.')),
+                E('div', { class: 'cbi-section-descr' }, _('在线更新：经加速通道检查 GitHub 最新版本并自动替换 /usr/bin/lucky（失败自动回滚）。Lucky 后台自带的更新页直连 GitHub，多数网络环境无法访问，故此处提供本地升级通道。')),
                 E('div', { 'style': 'display:flex; align-items:center; gap:12px; flex-wrap:wrap;' }, [
                     E('button', {
                         'class': 'cbi-button cbi-button-apply',
@@ -218,20 +218,20 @@ return view.extend({
                             const st = document.getElementById('lucky_upgrade_status');
                             return upgradeCall('upgrade_check', btn, st);
                         })
-                    }, _('Check update')),
+                    }, _('检查更新')),
                     E('button', {
                         'class': 'cbi-button cbi-button-action',
                         'id': 'lucky_btn_run',
                         'click': ui.createHandlerFn(this, function() {
                             const btn = document.getElementById('lucky_btn_run');
                             const st = document.getElementById('lucky_upgrade_status');
-                            if (!window.confirm(_('Download and upgrade Lucky now? The service will restart automatically.')))
+                            if (!window.confirm(_('确认下载并升级 Lucky？服务会自动重启。')))
                                 return Promise.resolve();
                             return upgradeCall('upgrade_run', btn, st);
                         })
-                    }, _('Upgrade now')),
+                    }, _('立即升级')),
                     E('span', { 'id': 'lucky_upgrade_status', 'style': 'flex:1; min-width:200px;' },
-                        E('em', {}, _('Click "Check update" to query the latest version.'))
+                        E('em', {}, _('点击「检查更新」查询最新版本。'))
                     )
                 ])
             ]);
