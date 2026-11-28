@@ -29,14 +29,20 @@ function run_upgrade_script(mode) {
 	if (!out || length(out) === 0)
 		return { current: '', latest: '', installed: '', update: false, error: '升级脚本无输出' };
 
+	/* 注意：本固件 libucode(2026-07-09) 不支持 throw 语句（会导致语法错误、
+	   整个 ucode 插件加载失败、rpcd 不注册 luci.lucky），因此这里只用
+	   try/catch 包住 json() 的运行时异常，不再用 throw 抛错 */
+	let res;
 	try {
-		const res = json(out);
-		if (!res || type(res) != 'object')
-			throw 'not an object';
-		return res;
+		res = json(out);
 	} catch (e) {
 		return { current: '', latest: '', installed: '', update: false, error: '输出解析失败: ' + e };
 	}
+
+	if (type(res) != 'object' || res == null)
+		return { current: '', latest: '', installed: '', update: false, error: '输出解析失败（脚本输出非 JSON）' };
+
+	return res;
 }
 
 const methods = {

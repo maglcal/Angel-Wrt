@@ -42,12 +42,14 @@ const getLuckyConfig = rpc.declare({
 
 const luckyUpgradeCheck = rpc.declare({
     object: 'luci.lucky',
-    method: 'upgrade_check'
+    method: 'upgrade_check',
+    expect: { '': {} }
 });
 
 const luckyUpgradeRun = rpc.declare({
     object: 'luci.lucky',
-    method: 'upgrade_run'
+    method: 'upgrade_run',
+    expect: { '': {} }
 });
 
 function getServiceStatus() {
