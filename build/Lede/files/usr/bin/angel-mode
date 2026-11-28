@@ -11,6 +11,7 @@
 # 默认主路由形态，网页向导会一直弹出直到选定。
 
 STATE_FILE=/etc/angel-mode.state
+DISMISS_FILE=/etc/angel-wizard.dismissed
 MAIN_IP="10.0.0.1"
 BYPASS_IP="10.0.0.2"
 NETMASK="255.255.254.0"
@@ -21,6 +22,11 @@ NOREBOOT="$2"
 
 usage() {
     sed -n '2,13p' "$0" | sed 's/^# \{0,1\}//'
+}
+
+# 应用模式后向导标记即作废（state 文件存在时 dismissed 无意义，顺手清掉防脏数据）
+clear_dismiss() {
+    rm -f "$DISMISS_FILE"
 }
 
 # 定位 br-lan 的 device 配置段
@@ -50,6 +56,7 @@ apply_main() {
     uci commit
     /etc/init.d/firewall enable
     echo main > "$STATE_FILE"
+    clear_dismiss
 }
 
 apply_bypass() {
@@ -71,6 +78,7 @@ apply_bypass() {
     /etc/init.d/firewall disable
     sysctl -w net.ipv4.ip_forward=1 >/dev/null 2>&1
     echo bypass > "$STATE_FILE"
+    clear_dismiss
 }
 
 case "$MODE" in

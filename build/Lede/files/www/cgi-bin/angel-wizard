@@ -1,6 +1,7 @@
 #!/bin/sh
 # Angel-Wrt 首启模式向导后端（uhttpd CGI，仅 GET）
-#   ?state          -> {"ok":true,"configured":bool,"mode":"..."}
+#   ?state          -> {"ok":true,"configured":bool,"mode":"...","dismissed":bool}
+#   ?dismiss        -> 记录「稍后再说」，本机此后不再自动弹向导（写 /etc/angel-wizard.dismissed）
 #   ?apply=main     -> 应用主路由模式并重启
 #   ?apply=bypass   -> 应用旁路由模式并重启
 # 已配置后 apply 一律拒绝（防止局域网内未授权切换），切换请用 angel-mode 命令。
@@ -10,21 +11,36 @@ echo "Cache-Control: no-store"
 echo ""
 
 STATE_FILE=/etc/angel-mode.state
+DISMISS_FILE=/etc/angel-wizard.dismissed
 
 [ "$REQUEST_METHOD" = "GET" ] || { echo '{"ok":false,"error":"method not allowed"}'; exit 0; }
 
 case "$QUERY_STRING" in
+    *dismiss*)      ACTION=dismiss ;;
     *apply=bypass*) ACTION=bypass ;;
     *apply=main*)   ACTION=main ;;
     *)              ACTION=state ;;
 esac
 
 if [ "$ACTION" = "state" ]; then
+    DISMISSED=false
+    [ -f "$DISMISS_FILE" ] && DISMISSED=true
     if [ -f "$STATE_FILE" ]; then
-        echo "{\"ok\":true,\"configured\":true,\"mode\":\"$(cat "$STATE_FILE")\"}"
+        echo "{\"ok\":true,\"configured\":true,\"mode\":\"$(cat "$STATE_FILE")\",\"dismissed\":$DISMISSED}"
     else
-        echo '{"ok":true,"configured":false,"mode":"unconfigured"}'
+        echo "{\"ok\":true,\"configured\":false,\"mode\":\"unconfigured\",\"dismissed\":$DISMISSED}"
     fi
+    exit 0
+fi
+
+if [ "$ACTION" = "dismiss" ]; then
+    # 仅在未选定模式时允许关闭向导；已配置则无需该标记
+    if [ -f "$STATE_FILE" ]; then
+        echo '{"ok":true,"configured":true}'
+        exit 0
+    fi
+    date > "$DISMISS_FILE" 2>/dev/null || echo 1 > "$DISMISS_FILE"
+    echo '{"ok":true,"dismissed":true}'
     exit 0
 fi
 

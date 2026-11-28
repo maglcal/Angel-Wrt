@@ -4,7 +4,9 @@
 #   分区表不一致（例如 rootfs 分区扩容后的首次升级）会整盘写入，此时只恢复
 #   /etc/sysupgrade.conf 清单文件 + 本目录清单文件。
 # /etc/angel-mode.state：主路由/旁路由模式落盘文件，丢了会重新弹设置向导。
+# /etc/angel-wizard.dismissed：向导「稍后再说」标记，丢了向导会在未选模式时重新弹出。
 # /etc/angel-pkg.list：更新前由 /etc/deletefile 生成的 opkg 已安装清单，
 #   配合 /etc/init.d/angel-pkg-restore 在开机后自动恢复手装插件。
 /etc/angel-mode.state
+/etc/angel-wizard.dismissed
 /etc/angel-pkg.list

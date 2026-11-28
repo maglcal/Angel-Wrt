@@ -100,7 +100,7 @@
 		var panel = h("div", { "class": "aw-panel" });
 
 		panel.appendChild(h("h1", { text: "Angel-Wrt 模式设置向导" }));
-		panel.appendChild(h("p", { "class": "aw-lead", text: "首次开机请选择本机工作模式。此向导只会出现这一次，之后如需切换请在 SSH 里执行 angel-mode 命令。" }));
+		panel.appendChild(h("p", { "class": "aw-lead", text: "首次开机请选择本机工作模式。点「稍后再说」后本向导不再自动弹出；如需切换模式，在 SSH 中执行 angel-mode 命令，或在 LuCI「系统」菜单里打开主路由/旁路由切换页。" }));
 
 		var cards = h("div", { "class": "aw-cards" });
 		["main", "bypass"].forEach(function (key) {
@@ -127,7 +127,12 @@
 
 		var laterBtn = h("button", { "class": "aw-btn aw-ghost", text: "稍后再说" });
 		laterBtn.addEventListener("click", function () {
+			/* 持久化关闭：服务端记 /etc/angel-wizard.dismissed，此后不再自动弹出。
+			 * 想重新选模式：SSH 执行 angel-mode main / angel-mode bypass，或 LuCI 系统菜单里的切换页。 */
+			fetch(API + "?dismiss", { cache: "no-store" }).catch(function () {});
 			mask.parentNode && mask.parentNode.removeChild(mask);
+			/* 关闭后跳 LuCI，避免停留在空白向导页 */
+			location.replace(LUCI);
 		});
 		applyBtn.addEventListener("click", function () {
 			if (!chosen) return;
@@ -167,6 +172,11 @@
 			.then(function (r) { return r.json(); })
 			.then(function (st) {
 				if (st && st.configured) {
+					location.replace(LUCI);
+					return;
+				}
+				/* 未选定模式但用户点过「稍后再说」：不弹，直接进 LuCI */
+				if (st && st.dismissed) {
 					location.replace(LUCI);
 					return;
 				}
