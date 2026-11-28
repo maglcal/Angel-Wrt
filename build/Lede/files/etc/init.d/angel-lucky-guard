@@ -1,0 +1,65 @@
+#!/bin/sh /etc/rc.common
+# Angel Lucky 开机自愈守卫（2026-11-28）
+# 背景：Lucky 后台自更新/任何来源的升级若把 /usr/bin/lucky 写坏（下载残包、
+#       overlay 空间不足截断），procd 反复拉起失败后就不再尝试，表现为起不来。
+# 策略：开机延迟检查二进制能否执行；坏了优先回滚 .bak（LuCI 在线更新留的
+#       备份），没有备份则走 lucky-upgrade 通道重下官方最新版（带校验与回滚）。
+# 注意：本脚本只在开机时跑一次，不常驻；正常情况零开销。
+
+START=99
+STOP=15
+USE_PROCD=0
+
+BIN="/usr/bin/lucky"
+BAK="/usr/bin/lucky.bak"
+LOG_TAG="angel-lucky-guard"
+
+bin_ok() {
+    _p="${1:-$BIN}"
+    [ -x "$_p" ] && "$_p" -info -cd /etc/lucky >/dev/null 2>&1
+}
+
+restore_from_bak() {
+    bin_ok "$BAK" || return 1
+    logger -t "$LOG_TAG" "lucky 二进制损坏，从 $BAK 回滚"
+    cp -f "$BAK" "$BIN" || return 1
+    /etc/init.d/lucky restart >/dev/null 2>&1
+    return 0
+}
+
+redownload() {
+    command -v /usr/libexec/lucky-upgrade >/dev/null 2>&1 || return 1
+    logger -t "$LOG_TAG" "无可用备份，走 lucky-upgrade 重下官方最新版"
+    /usr/libexec/lucky-upgrade do >/dev/null 2>&1
+    return 0
+}
+
+guard() {
+    # 等 lucky 自身的服务先启动稳定，再判定二进制好坏
+    sleep 20
+    bin_ok && return 0
+    logger -t "$LOG_TAG" "检测到 /usr/bin/lucky 无法执行，尝试自愈"
+    if restore_from_bak; then
+        sleep 5
+        bin_ok && logger -t "$LOG_TAG" "自愈成功（备份回滚）" && return 0
+    fi
+    if redownload; then
+        sleep 10
+        bin_ok && logger -t "$LOG_TAG" "自愈成功（重装最新版）" && return 0
+    fi
+    logger -t "$LOG_TAG" "自愈失败，请手动检查：df -h / 与 /usr/bin/lucky -info -cd /etc/lucky"
+    return 1
+}
+
+boot() {
+    guard
+}
+
+start() {
+    # 手动 start 不阻塞 rc 脚本，后台执行
+    ( guard ) >/dev/null 2>&1 &
+}
+
+stop() {
+    return 0
+}

@@ -25,6 +25,9 @@ if git clone -q --depth=1 --filter=blob:none --sparse -b Lede https://github.com
     cp -Rf "${Lucky_tmp}/owpkg/luci-app-lucky/lucky/." "${base}/package/lucky/"
     cp -Rf "${Lucky_tmp}/owpkg/luci-app-lucky/luci-app-lucky/." "${base}/package/luci-app-lucky/"
     sed -i "s/^PKG_VERSION:=.*/PKG_VERSION:=${Lucky_ver}/" "${base}/package/lucky/Makefile"
+    # procd 默认 respawn 重试 5 次即放弃，Lucky 自更新后退出进程若遇暂态故障会被放弃；
+    # 改为无限重试（threshold 3600 / timeout 5 / retry 0），配合 angel-lucky-guard 开机自愈
+    sed -i 's/procd_set_param respawn[[:space:]]*$/procd_set_param respawn 3600 5 0/' "${base}/package/lucky/files/lucky.init"
     # 下载源：danshui 原版只从 GitHub releases 拉，新版(3.6+) GitHub 已无对应 tag 会 404；
     # 改为官网文件站直连优先（release.66666.host/v{ver}/{ver}_lucky/...），GitHub 兜底
     sed -i 's|wget https://github\.com/gdy666/lucky/releases/download/v\$(PKG_VERSION)/\$(PKG_NAME)_\$(PKG_VERSION)_Linux_\$(LUCKY_ARCH)\.tar\.gz -O \$(PKG_BUILD_DIR)/\$(PKG_NAME)_\$(PKG_VERSION)_Linux_\$(LUCKY_ARCH)\.tar\.gz|wget https://release.66666.host/v$(PKG_VERSION)/$(PKG_VERSION)_lucky/$(PKG_NAME)_$(PKG_VERSION)_Linux_$(LUCKY_ARCH).tar.gz -O $(PKG_BUILD_DIR)/$(PKG_NAME)_$(PKG_VERSION)_Linux_$(LUCKY_ARCH).tar.gz \|\| wget https://github.com/gdy666/lucky/releases/download/v$(PKG_VERSION)/$(PKG_NAME)_$(PKG_VERSION)_Linux_$(LUCKY_ARCH).tar.gz -O $(PKG_BUILD_DIR)/$(PKG_NAME)_$(PKG_VERSION)_Linux_$(LUCKY_ARCH).tar.gz|' "${base}/package/lucky/Makefile"
