@@ -115,22 +115,34 @@ download_pkg() {
         mkdir -p "$WORKDIR/dl"
         fetch "$1" "$WORKDIR/dl/pkg.tar.gz" || return 1
         # 校验 tar 包内确有 lucky 可执行文件
-        if tar -tzf "$WORKDIR/dl/pkg.tar.gz" 2>/dev/null | grep -q "lucky"; then
-            return 0
+        if ! tar -tzf "$WORKDIR/dl/pkg.tar.gz" 2>/dev/null | grep -q "lucky"; then
+            rm -f "$WORKDIR/dl/pkg.tar.gz"
+            return 1
         fi
-        rm -f "$WORKDIR/dl/pkg.tar.gz"
-        return 1
+        # 官网通道附带 checksums.txt：取得到就强校验 sha256，防止残包/被篡改的包写进系统
+        rm -f "$WORKDIR/dl/checksums.txt"
+        fetch "$2" "$WORKDIR/dl/checksums.txt" && {
+            _want="$(grep -E "[[:space:]]${_asset}\$" "$WORKDIR/dl/checksums.txt" 2>/dev/null | awk '{print $1}' | head -n 1)"
+            if [ -n "$_want" ]; then
+                _got="$(sha256sum "$WORKDIR/dl/pkg.tar.gz" 2>/dev/null | awk '{print $1}')"
+                if [ "$_got" != "$_want" ]; then
+                    rm -f "$WORKDIR/dl/pkg.tar.gz"
+                    return 1
+                fi
+            fi
+        }
+        return 0
     }
 
-    # ① 官网：{site}/v{ver}/{ver}_lucky/lucky_{ver}_Linux_{arch}.tar.gz
-    _try_url "${RELEASE_SITE}/v${_ver}/${_ver}_lucky/${_asset}" && return 0
+    # ① 官网：{site}/v{ver}/{ver}_lucky/lucky_{ver}_Linux_{arch}.tar.gz（带 checksums.txt）
+    _try_url "${RELEASE_SITE}/v${_ver}/${_ver}_lucky/${_asset}" "${RELEASE_SITE}/v${_ver}/${_ver}_lucky/checksums.txt" && return 0
     # ② 官网备用镜像 lucky666.cn/release
-    _try_url "https://lucky666.cn/release/v${_ver}/${_ver}_lucky/${_asset}" && return 0
-    # ③ GitHub 代理轮询（版本若已在 GitHub 发布则可用）
+    _try_url "https://lucky666.cn/release/v${_ver}/${_ver}_lucky/${_asset}" "https://lucky666.cn/release/v${_ver}/${_ver}_lucky/checksums.txt" && return 0
+    # ③ GitHub 代理轮询（版本若已在 GitHub 发布则可用；无 checksums.txt 清单，传空跳过强校验）
     for _p in $(proxy_list); do
         [ -n "$_p" ] && _u="${_p}/https://github.com/gdy666/lucky/releases/download/v${_ver}/${_asset}" \
                      || _u="https://github.com/gdy666/lucky/releases/download/v${_ver}/${_asset}"
-        _try_url "$_u" && return 0
+        _try_url "$_u" "" && return 0
     done
     return 1
 }
@@ -166,6 +178,14 @@ do_upgrade() {
             cp -f "$BIN" "$BIN.bak" 2>/dev/null
             if ! cp -f "$_newbin" "$BIN.new" 2>/dev/null; then
                 out_json "$_cur" "$_latest" "" false "写入 /usr/bin/lucky.new 失败(空间不足?)"
+                return 1
+            fi
+            # 写入完整性校验：落盘字节数必须与源二进制一致（overlay 空间不足会静默截断，导致服务起不来）
+            _src_bytes="$(wc -c < "$_newbin")"
+            _dst_bytes="$(wc -c < "$BIN.new" 2>/dev/null)"
+            if [ "$_src_bytes" != "$_dst_bytes" ]; then
+                rm -f "$BIN.new"
+                out_json "$_cur" "$_latest" "" false "写入不完整(空间不足)：需${_src_bytes}字节 实写${_dst_bytes:-0}字节，请清理/扩容根分区"
                 return 1
             fi
             mv -f "$BIN.new" "$BIN"
