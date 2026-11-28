@@ -12,9 +12,10 @@
 
 base="${HOME_PATH:-.}"
 
-# Lucky 守护进程版本钉子：跟随 https://github.com/gdy666/lucky/releases 手动更新
-# （sirpdboy 打包长期停旧版；扩展 CLI -setconf/-cd 与 3.x 兼容，已对照 gdy666/luci-app-lucky 官方打包验证）
-Lucky_ver="3.5.0"
+# Lucky 守护进程版本钉子：跟随官网文件站 https://release.66666.host 手动更新
+# （作者 3.6+ 只发官网文件站，GitHub releases 停在 3.5.0 且无 v3.8.1 tag；
+#   Build/Prepare 下载源已同步改为 官网直连 + GitHub 兜底，见下方第二个 sed）
+Lucky_ver="3.8.1"
 
 # ---------- Lucky（danshui 源界面 + 守护进程升到 Lucky_ver） ----------
 Lucky_tmp="$(mktemp -d)"
@@ -24,6 +25,9 @@ if git clone -q --depth=1 --filter=blob:none --sparse -b Lede https://github.com
     cp -Rf "${Lucky_tmp}/owpkg/luci-app-lucky/lucky/." "${base}/package/lucky/"
     cp -Rf "${Lucky_tmp}/owpkg/luci-app-lucky/luci-app-lucky/." "${base}/package/luci-app-lucky/"
     sed -i "s/^PKG_VERSION:=.*/PKG_VERSION:=${Lucky_ver}/" "${base}/package/lucky/Makefile"
+    # 下载源：danshui 原版只从 GitHub releases 拉，新版(3.6+) GitHub 已无对应 tag 会 404；
+    # 改为官网文件站直连优先（release.66666.host/v{ver}/{ver}_lucky/...），GitHub 兜底
+    sed -i 's|wget https://github\.com/gdy666/lucky/releases/download/v\$(PKG_VERSION)/\$(PKG_NAME)_\$(PKG_VERSION)_Linux_\$(LUCKY_ARCH)\.tar\.gz -O \$(PKG_BUILD_DIR)/\$(PKG_NAME)_\$(PKG_VERSION)_Linux_\$(LUCKY_ARCH)\.tar\.gz|wget https://release.66666.host/v$(PKG_VERSION)/$(PKG_VERSION)_lucky/$(PKG_NAME)_$(PKG_VERSION)_Linux_$(LUCKY_ARCH).tar.gz -O $(PKG_BUILD_DIR)/$(PKG_NAME)_$(PKG_VERSION)_Linux_$(LUCKY_ARCH).tar.gz \|\| wget https://github.com/gdy666/lucky/releases/download/v$(PKG_VERSION)/$(PKG_NAME)_$(PKG_VERSION)_Linux_$(LUCKY_ARCH).tar.gz -O $(PKG_BUILD_DIR)/$(PKG_NAME)_$(PKG_VERSION)_Linux_$(LUCKY_ARCH).tar.gz|' "${base}/package/lucky/Makefile"
     echo "Lucky 插件已就位（界面 danshui 新版，守护进程 v${Lucky_ver}，优先于 lede 源同名旧版）"
 else
     echo "警告：Lucky 源拉取失败，将回退使用 feeds 里的旧版本" >&2
