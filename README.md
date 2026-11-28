@@ -36,12 +36,10 @@ build/Lede/
 除 lede 官方源外，固件额外内置（x86_64 版）：
 
 - **Lucky / EasyTier / OpenList2 / AdGuardHome / Tailscale / ZeroTier** 等网络工具（见 seed）
-- **PicoClaw**（v0.5.6，MIT）：轻量 AI Agent，Web 面板 18800 端口，LLM 配置在面板内完成；数据目录 `/etc/picoclaw`
-- **SongLoft**（v2.13.13，Apache-2.0）：自托管音乐服务器，Web 界面 58091 端口；数据 `/etc/songloft/data`，曲库目录 `/etc/songloft/music`（可在应用内改挂载磁盘）
 - **SQM CAKE 智能队列**（`网络 → SQM QoS`，配合 irqbalance/zram-swap 优化）
 - **ttyd 网页终端**、**irqbalance** 中断均衡、**zram-swap** 内存压缩
 
-lite 精简版仅含网络工具与 SQM/irqbalance/zram-swap，不含 PicoClaw/SongLoft 两个大件。第三方二进制均取自上游官方 GitHub Release，SHA-256 已人工比对官方 checksums.txt。
+lite 精简版仅含网络工具与 SQM/irqbalance/zram-swap。
 
 ## 依赖
 
